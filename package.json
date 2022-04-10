@@ -1,0 +1,26 @@
+{
+  "name": "file-streamer",
+  "type": "module",
+  "version": "0.0.1",
+  "description": "node parse csv file by stream and process",
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon index",
+    "start": "node index",
+    "test": "test"
+  },
+  "keywords": [
+    "stream",
+    "csv"
+  ],
+  "author": "aalcocer",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.17.3",
+    "formidable": "^2.0.1",
+    "papaparse": "^5.3.2"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.15"
+  }
+}
