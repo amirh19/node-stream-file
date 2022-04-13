@@ -18,6 +18,7 @@
   "dependencies": {
     "express": "^4.17.3",
     "formidable": "^2.0.1",
+    "openpgp": "^5.2.1",
     "papaparse": "^5.3.2"
   },
   "devDependencies": {
