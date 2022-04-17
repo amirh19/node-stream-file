@@ -4,11 +4,10 @@ import formidable from "formidable";
 import openpgp from "openpgp";
 import fs from "fs";
 import { resolve } from "path";
-import { PassThrough } from "stream";
+import { PassThrough, Duplex } from "stream";
 
 const app = express();
 app.post("/", async (req, res) => {
-  let chunks = 0;
   const form = formidable({
     fileWriteStreamHandler: () => {
       const papastream = papaparse.parse(papaparse.NODE_STREAM_INPUT, {});
@@ -25,13 +24,17 @@ app.post("/", async (req, res) => {
     binary: duplex,
     format: "binary",
   });
+  const pgpPublickKey = fs.readFileSync("private.key", "utf8");
 
   // ReadStream
   /**@type {Stream} */
   const encrypted = await openpgp.encrypt({
     message, // input as Message object
-    passwords: ["secret stuff"], // multiple passwords possible
+    encryptionKeys: await openpgp.readKey({
+      armoredKey: pgpPublickKey,
+    }),
     format: "armored",
+    config: { preferredCompressionAlgorithm: openpgp.enums.compression.zip },
   });
 
   const writeStream = fs.createWriteStream(resolve() + "/write.txt");
@@ -49,28 +52,25 @@ app.post("/", async (req, res) => {
 });
 app.get("/decrypted", async (req, res) => {
   const filePath = resolve() + "/write.txt";
-  const readStream = fs.createReadStream(filePath, { encoding: "utf-8" });
+  const encrypted = fs.createReadStream(filePath, { encoding: "utf-8" });
   const stat = fs.statSync(filePath);
   res.writeHead(200, {
     "Content-Type": "text/plain",
     "Content-Length": stat.size,
   });
-  const encryptedMessage = await openpgp.decrypt({
-    message: await openpgp.readMessage({
-      armoredMessage: readStream,
-    }),
+  const privateKeyArmored = fs.readFileSync("private.key", "utf8");
+  const privateKey = await openpgp.decryptKey({
+    privateKey: await openpgp.readPrivateKey({ armoredKey: privateKeyArmored }),
+    passphrase: "amir123",
   });
-  const { data: decrypted } = await openpgp.decrypt({
-    message: encryptedMessage,
-    passwords: ["secret stuff"], // decrypt with password
-    format: "binary", // output as Uint8Array
+  const message = await openpgp.readMessage({
+    armoredMessage: encrypted, // parse armored message
   });
-  readStream.on("pause", () => {
-    console.log("============= PAUSED =================== ");
+  const decrypted = await openpgp.decrypt({
+    message,
+    decryptionKeys: privateKey,
   });
-  decrypted.on("error", () => console.log("error=?"));
-  decrypted.on("data", console.log);
-  decrypted.pipe(res);
+  decrypted.data.pipe(res);
 });
 app.listen(3000, () => {
   console.log("listening on port 3000");
