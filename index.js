@@ -4,24 +4,29 @@ import formidable from "formidable";
 import openpgp from "openpgp";
 import fs from "fs";
 import { resolve } from "path";
-import { PassThrough, Duplex } from "stream";
 
 const app = express();
 app.post("/", async (req, res) => {
+  let chunks = 0;
+  res.writeHead(201);
+  const ReadWriteStream = new PassThrough();
   const form = formidable({
+    maxFileSize: Math.pow(1024, 3),
     fileWriteStreamHandler: () => {
       const papastream = papaparse.parse(papaparse.NODE_STREAM_INPUT, {});
       // Duplex
-      papastream.on("data", (data) => {
-        //data is array
+      papastream.on("data", () => {
+        console.log(++data);
       });
-      return papastream;
+      papastream.on("end", () => {
+        console.log("============= PAPASTREAM IS DONE ==============");
+      });
+      ReadWriteStream.pipe(papastream);
+      return ReadWriteStream;
     },
   });
-  // res -> formidable -> papaparse -> encrypt -> sftp
-  const duplex = new PassThrough();
   const message = await openpgp.createMessage({
-    binary: duplex,
+    binary: ReadWriteStream,
     format: "binary",
   });
   const pgpPublickKey = fs.readFileSync("private.key", "utf8");
@@ -39,25 +44,20 @@ app.post("/", async (req, res) => {
 
   const writeStream = fs.createWriteStream(resolve() + "/write.txt");
   encrypted.pipe(writeStream);
-  form.onPart = (part) => {
-    part.on("data", (data) => {
-      duplex.push(data, "utf-8");
-    });
-    form._handlePart(part);
-  };
+  form.on("error", (error) => {
+    console.log(error);
+  });
   form.parse(req, () => {
-    duplex.push(null);
-    res.send("okay");
+    console.log("FINISHED PARSING, WAITING TO STOP WRITING");
+    writeStream.on("close", () => {
+      console.log("FINISHED");
+      res.end("done");
+    });
   });
 });
 app.get("/decrypted", async (req, res) => {
   const filePath = resolve() + "/write.txt";
   const encrypted = fs.createReadStream(filePath, { encoding: "utf-8" });
-  const stat = fs.statSync(filePath);
-  res.writeHead(200, {
-    "Content-Type": "text/plain",
-    "Content-Length": stat.size,
-  });
   const privateKeyArmored = fs.readFileSync("private.key", "utf8");
   const privateKey = await openpgp.decryptKey({
     privateKey: await openpgp.readPrivateKey({ armoredKey: privateKeyArmored }),
@@ -69,7 +69,13 @@ app.get("/decrypted", async (req, res) => {
   const decrypted = await openpgp.decrypt({
     message,
     decryptionKeys: privateKey,
+    format: "binary",
   });
+  res.setHeader(
+    "Content-disposition",
+    "attachment; filename=" + "decrypted.txt"
+  );
+  res.setHeader("Content-type", "plain/text");
   decrypted.data.pipe(res);
 });
 app.listen(3000, () => {
