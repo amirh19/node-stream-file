@@ -4,6 +4,7 @@ import formidable from "formidable";
 import openpgp from "openpgp";
 import fs from "fs";
 import { resolve } from "path";
+import { PassThrough } from "stream";
 
 const app = express();
 app.post("/", async (req, res) => {
@@ -16,7 +17,6 @@ app.post("/", async (req, res) => {
       const papastream = papaparse.parse(papaparse.NODE_STREAM_INPUT, {});
       // Duplex
       papastream.on("data", () => {
-        console.log(++data);
       });
       papastream.on("end", () => {
         console.log("============= PAPASTREAM IS DONE ==============");
