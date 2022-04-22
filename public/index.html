@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stream file using sockets</title>
+</head>
+
+<body>
+  <form action="/" method="post" id="form" enctype="multipart/form-data">
+    <input type="file" id="crm_file">
+    <input type="submit" value="Upload file">
+  </form>
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const form = document.getElementById("form");
+    const input = document.getElementById("crm_file");
+    let selectedFile;
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (!selectedFile) return;
+      const data = new FormData();
+      const options = { headers: {} };
+      data.append("file", selectedFile);
+      fetch("/", {
+        body: data,
+        method: "post",
+      }).then(res => res.json()).then(res => {
+        const interval = setInterval(() => {
+          fetch(`/status?id=${res.id}`, {
+            method: "GET"
+          }).then(res => res.json()).then(res => {
+            if (res.done) {
+              console.log("FINISHED");
+              return clearInterval(interval);
+            }
+            console.log("RETRYING");
+          });
+        }, 5000);
+      });
+      e.preventDefault();
+    });
+    input.addEventListener("change", (e) => {
+      selectedFile = e.target.files[0];
+    })
+  </script>
+</body>
+
+</html>
